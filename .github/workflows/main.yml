@@ -1,34 +1,47 @@
 name: A workflow for my Hello World App
+
 on: push
 
 jobs:
   build:
     name: Hello world action
     runs-on: ubuntu-26.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-a
-      - name: Set up Temurin 25
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           java-version: '25'
           distribution: 'temurin'
 
-      - name: Setup network
-        run: |
-          docker network create --driver bridge se-methods
-          docker pull mongo
-          docker run -d --name mongo-dbserver --network se-methods mongo
-
       - name: Build with Maven
         run: mvn package
 
-      - name: Build
-        run: docker build -t se_methods .
+      - name: Build Docker Image
+        run: docker build -t devopsimage .
 
-      - name: Run image
-        run: docker run --network se-methods --name devopscontainer se_methods
+      - name: Create Docker Network
+        run: docker network create se-methods
 
-      - name: view logs
-        run: docker logs devopscontainer
+      - name: Start MongoDB
+        run: docker run -d --name mongodb-server --network se-methods mongo:latest
+
+      - name: Wait for MongoDB
+        run: |
+          echo "Waiting for MongoDB..."
+          for i in {1..30}; do
+            if docker exec mongodb-server mongosh --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
+              echo "MongoDB is ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Check Docker Network
+        run: docker network inspect se-methods
+
+      - name: Run Java Docker Container
+        run: docker run --rm --network se-methods devopsimage
